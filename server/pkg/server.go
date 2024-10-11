@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
@@ -61,14 +62,24 @@ func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
 	fmt.Scanln(&coord1, &coord2)
 
 	game.Moves = append(game.Moves, fmt.Sprintf("%s krest %s %s", game.Player.Name, coord1, coord2))
+	
+	// Проверка на победителя
+	winner := checkGame(game.Moves)
+	if winner == "try_add_where_stand" {
+		http.Error(w, "Попробуйте добавить куда-то в другое место", http.StatusBadRequest)
+		return
+	}
+	if winner != "nobody" {
+		game.IsFinished = true
+	}
 
 	// Отправка успешного ответа
-
 	url := fmt.Sprintf("http://%s/do_step", game.Player.Address)
 
 	// Формирование данных для запроса
 	stepData := map[string]string{
-		"step": fmt.Sprintf("%s krest %s %s", "Eddi", coord1, coord2),
+		"step":        fmt.Sprintf("%s krest %s %s", "Eddi", coord1, coord2),
+		"is_finished": strconv.FormatBool(game.IsFinished),
 	}
 
 	jsonData, err := json.Marshal(stepData)
@@ -116,15 +127,30 @@ func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	game.Moves = append(game.Moves, playerStep)
+	winner = checkGame(game.Moves)
+	if winner == "try_add_where_stand" {
+		http.Error(w, "Попробуйте добавить куда-то в другое место", http.StatusBadRequest)
+		return
+	}
+	if winner != "nobody" {
+		game.IsFinished = true
+	}
 
 	// Обновление игры в карте
-
 	s.gamesMutex.Lock()
-	s.games[gameName] = game
+	if game.IsFinished {
+		delete(s.games, gameName)
+		s.historyGame[*game.Player] = append(s.historyGame[*game.Player], *game)
+	} else {
+		s.games[gameName] = game
+	}
 	s.gamesMutex.Unlock()
 
 	response := map[string]string{
 		"message": fmt.Sprintf("Шаг выполнен в игре %s игроком %s", gameName, game.Player.Name),
+	}
+	if game.IsFinished {
+		response["winner"] = "игра закончена! победил:" + winner
 	}
 
 	w.Header().Set("Content-Type", "application/json")

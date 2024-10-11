@@ -74,9 +74,9 @@ func (c *Client) GetGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	startGame := r.URL.Query().Get("is_need_start")
-    if startGame == "" {
+	if startGame == "" {
 		startGame = "0"
-    }
+	}
 
 	fmt.Print("Будем начинать игру с Эдди?(1 - да, 0 - нет): ")
 	var strt int
@@ -88,10 +88,10 @@ func (c *Client) GetGame(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]string{
-        "message": fmt.Sprintf("Cоглашаюсь на начало игры %s", gameName),
+		"message":  fmt.Sprintf("Cоглашаюсь на начало игры %s", gameName),
 		"is_start": "1",
-		"step": "",
-    }
+		"step":     "",
+	}
 
 	if startGame == "1" {
 		var coord1, coord2 string
@@ -101,25 +101,30 @@ func (c *Client) GetGame(w http.ResponseWriter, r *http.Request) {
 		c.game.Moves = append(c.game.Moves, response["step"])
 	}
 
-    w.Header().Set("Content-Type", "application/json")
-    if err := json.NewEncoder(w).Encode(response); err != nil {
-        http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
-        return
-    }
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (c *Client) DoStep(w http.ResponseWriter, r *http.Request) {
-	if c.game.IsFinished {
+	if c.game.IsFinished == true{
 		http.Error(w, "Игра завершена", http.StatusBadRequest)
 		return
 	}
 	// Извлечение и парсинг поля step из запроса
 	var requestData map[string]string
 	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		fmt.Print(err)
 		http.Error(w, fmt.Sprintf("ошибка декодирования запроса: %v", err), http.StatusBadRequest)
 		return
 	}
-
+	is_finished := requestData["is_finished"]
+	if is_finished == "true" {
+		c.game.IsFinished = true
+		return
+	}
 	step, ok := requestData["step"]
 	if !ok {
 		http.Error(w, "поле step отсутствует в запросе", http.StatusBadRequest)
@@ -134,6 +139,14 @@ func (c *Client) DoStep(w http.ResponseWriter, r *http.Request) {
 		"step": c.Name + " zero " + coord1 + " " + coord2,
 	}
 	c.game.Moves = append(c.game.Moves, response["step"])
+	winner := checkGame(c.game.Moves)
+	log.Println("winner: ", winner)
+	if winner == "try_add_where_stand" {
+		fmt.Print("Попробуйте добавить куда-то в другое место")
+	}
+	if winner != "nobody" {
+		c.game.IsFinished = true
+	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
