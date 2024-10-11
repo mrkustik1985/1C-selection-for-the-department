@@ -30,8 +30,8 @@ type Server struct {
 
 func NewServer() *Server {
 	return &Server{
-		players: make(map[string]*Player),
-		games:   make(map[string]*Game),
+		players:     make(map[string]*Player),
+		games:       make(map[string]*Game),
 		historyGame: make(map[Player][]Game),
 	}
 }
@@ -87,23 +87,22 @@ func (s *Server) SuggestGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	
 
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse map[string]interface{}
-        if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
-            http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока с ошибкой: %+v", errorResponse), http.StatusBadRequest)
-            return
-        }
+		if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
+			http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока с ошибкой: %+v", errorResponse), http.StatusBadRequest)
+			return
+		}
 
-        errorMessage, ok := errorResponse["error"].(string)
-        if !ok {
-            http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока с ошибкой: %s", errorMessage), http.StatusBadRequest)
-            return
-        }
+		errorMessage, ok := errorResponse["error"].(string)
+		if !ok {
+			http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока с ошибкой: %s", errorMessage), http.StatusBadRequest)
+			return
+		}
 
-        http.Error(w, fmt.Sprintf("ошибка от игрока: %s", errorMessage), http.StatusBadRequest)
-        return
+		http.Error(w, fmt.Sprintf("ошибка от игрока: %s", errorMessage), http.StatusBadRequest)
+		return
 	}
 
 	// Чтение ответа от игрока
@@ -130,10 +129,10 @@ func (s *Server) SuggestGame(w http.ResponseWriter, r *http.Request) {
 
 	// Проверка ответа от игрока(больше для дебагга)
 	w.Header().Set("Content-Type", "application/json")
-    if err := json.NewEncoder(w).Encode(response); err != nil {
-        http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
-        return
-    }
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *Server) GetHistoryByName(w http.ResponseWriter, r *http.Request) {
@@ -159,3 +158,33 @@ func (s *Server) GetHistoryByName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func (s *Server) GetGameNotFinished(w http.ResponseWriter, r *http.Request) {
+	type GameInfo struct {
+		GameName   string `json:"game_name"`
+		PlayerName string `json:"player_name"`
+	}
+
+	unfinishedGames := []GameInfo{}
+
+	s.gamesMutex.Lock()
+	for gameName, game := range s.games {
+		if !game.IsFinished {
+			unfinishedGames = append(unfinishedGames, GameInfo{
+				GameName:   gameName,
+				PlayerName: game.Player.Name,
+			})
+		}
+	}
+	s.gamesMutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(unfinishedGames); err != nil {
+		http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
+
+// }
