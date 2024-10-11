@@ -1,5 +1,3 @@
 #!/bin/bash
 
-go build -o server ./cmd
-./server
-rm ./server
+go run ./cmd
