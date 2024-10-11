@@ -68,32 +68,58 @@ func (c *Client) RegisterPlayer() error {
 
 func (c *Client) GetGame(w http.ResponseWriter, r *http.Request) {
 	gameName := r.URL.Query().Get("game")
+
 	if gameName == "" {
 		http.Error(w, "game parameter is required", http.StatusBadRequest)
 		return
 	}
+	startGame := r.URL.Query().Get("is_need_start")
+    if startGame == "" {
+		startGame = "0"
+    }
 
-	url := fmt.Sprintf("%s?game=%s", c.GetReq("game"), gameName)
-	resp, err := http.Get(url)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("ошибка отправки запроса: %v", err), http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, fmt.Sprintf("неожиданный статус ответа: %v", resp.Status), http.StatusInternalServerError)
-		return
-	}
-
-	var gameProposal map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&gameProposal); err != nil {
-		http.Error(w, fmt.Sprintf("ошибка декодирования ответа: %v", err), http.StatusInternalServerError)
+	fmt.Print("Будем начинать игру с Эдди?(1 - да, 0 - нет): ")
+	var strt int
+	fmt.Scanln(&strt)
+	if strt == 0 {
+		http.Error(w, "Прости, пока не хочу начинать игру", http.StatusBadRequest)
 		return
 	}
 
+	response := map[string]string{
+        "message": fmt.Sprintf("Cоглашаюсь на начало игры %s", gameName),
+		"is_start": "1",
+    }
+
+	if startGame == "1" {
+		var coord1, coord2 string
+		fmt.Print("Введите ваш ход (например, '1 1'): ")
+		fmt.Scanln(&coord1, &coord2)
+		response["step"] = c.Name + " zero " + coord1 + " " + coord2
+		c.game.Moves = append(c.game.Moves, response["step"])
+	}
+
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(response); err != nil {
+        http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
+        return
+    }
+}
+
+func (c *Client) DoStep(w http.ResponseWriter, r *http.Request) {
+	if c.game.IsFinished {
+		http.Error(w, "Игра завершена", http.StatusBadRequest)
+		return
+	}
+	var coord1, coord2 string
+	fmt.Print("Введите ваш ход (например, '1 1'): ")
+	fmt.Scanln(&coord1, &coord2)
+	response := map[string]string{
+		"step": c.Name + " zero " + coord1 + " " + coord2,
+	}
+	c.game.Moves = append(c.game.Moves, response["step"])
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(gameProposal); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
 		return
 	}

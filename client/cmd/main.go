@@ -40,7 +40,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	r.Post("get_game", client.GetGame)
+	r.Get("/get_game", client.GetGame)
 	r.Get("/steps", client.GetSteps)
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), r); err != nil {
