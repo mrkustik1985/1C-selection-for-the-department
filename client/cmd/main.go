@@ -2,10 +2,14 @@ package main
 
 import (
 	client "1C-selection-for-the-department/client/pkg"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
-	_ "embed"
+	"net/http"
+
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 )
 
 //go:embed config.json
@@ -31,5 +35,15 @@ func main() {
 	err = client.RegisterPlayer()
 	if err != nil {
 		log.Fatalf("error in registration player: %s", err)
+	}
+
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+
+	r.Post("get_game", client.GetGame)
+	r.Get("/steps", client.GetSteps)
+
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), r); err != nil {
+		log.Fatalf("Ошибка запуска сервера: %s", err)
 	}
 }
