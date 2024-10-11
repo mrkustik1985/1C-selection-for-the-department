@@ -82,6 +82,7 @@ func (c *Client) GetGame(w http.ResponseWriter, r *http.Request) {
 	var strt int
 	fmt.Scanln(&strt)
 	if strt == 0 {
+		log.Println("Игра не начата")
 		http.Error(w, "Прости, пока не хочу начинать игру", http.StatusBadRequest)
 		return
 	}
@@ -89,6 +90,7 @@ func (c *Client) GetGame(w http.ResponseWriter, r *http.Request) {
 	response := map[string]string{
         "message": fmt.Sprintf("Cоглашаюсь на начало игры %s", gameName),
 		"is_start": "1",
+		"step": "",
     }
 
 	if startGame == "1" {

@@ -21,6 +21,7 @@ func main() {
 	// одключаем обработчики
 	r.Post("/register", server.RegisterPlayer)
 	r.Get("/suggest_game", server.SuggestGame)
+	r.Get("/history_step_by_name", server.GetHistoryByName)
 	// запускаем сервер на порту localhost 8080
 	log.Printf("server start on port: %d", port)
 	http.ListenAndServe(fmt.Sprintf(":%d", port), r)

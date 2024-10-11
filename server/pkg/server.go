@@ -25,18 +25,19 @@ type Server struct {
 	games        map[string]*Game
 	gamesMutex   sync.Mutex
 	playersMutex sync.Mutex
+	historyGame  map[Player][]Game
 }
 
 func NewServer() *Server {
 	return &Server{
 		players: make(map[string]*Player),
 		games:   make(map[string]*Game),
+		historyGame: make(map[Player][]Game),
 	}
 }
 
 func (s *Server) RegisterPlayer(w http.ResponseWriter, r *http.Request) {
 	var player Player
-	log.Println("prishel req")
 	if err := json.NewDecoder(r.Body).Decode(&player); err != nil {
 		log.Println("bad req")
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -73,7 +74,7 @@ func (s *Server) SuggestGame(w http.ResponseWriter, r *http.Request) {
 	}
 	s.gamesMutex.Unlock()
 
-	fmt.Print(fmt.Sprintf("Будем начинать игру с %s вторыми?(1 - нет, 0 - да): ", player.Name))
+	fmt.Print(fmt.Sprintf("будем начинать игру с %s вторыми?(1 - нет, 0 - да): ", player.Name))
 	var is_need_start string
 	fmt.Scanln(&is_need_start)
 	// Формирование URL для запроса к игроку
@@ -86,21 +87,22 @@ func (s *Server) SuggestGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	
 
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse map[string]interface{}
         if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
-            http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока: %v", resp.Status), http.StatusInternalServerError)
+            http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока с ошибкой: %+v", errorResponse), http.StatusBadRequest)
             return
         }
 
         errorMessage, ok := errorResponse["error"].(string)
         if !ok {
-            http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока: %v", resp.Status), http.StatusInternalServerError)
+            http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока с ошибкой: %s", errorMessage), http.StatusBadRequest)
             return
         }
 
-        http.Error(w, fmt.Sprintf("ошибка от игрока: %s", errorMessage), http.StatusInternalServerError)
+        http.Error(w, fmt.Sprintf("ошибка от игрока: %s", errorMessage), http.StatusBadRequest)
         return
 	}
 
@@ -111,10 +113,49 @@ func (s *Server) SuggestGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Проверка ответа от игрока
+	if response["is_start"] == "1" {
+		s.gamesMutex.Lock()
+		s.games[gameName] = &Game{
+			ID:     gameName,
+			Player: player,
+		}
+		if step, ok := response["step"].(string); ok {
+			s.games[gameName].Moves = append(s.games[gameName].Moves, step)
+		}
+		s.gamesMutex.Unlock()
+	} else {
+		http.Error(w, "игра не начата", http.StatusBadRequest)
+		return
+	}
+
+	// Проверка ответа от игрока(больше для дебагга)
 	w.Header().Set("Content-Type", "application/json")
     if err := json.NewEncoder(w).Encode(response); err != nil {
         http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
         return
     }
+}
+
+func (s *Server) GetHistoryByName(w http.ResponseWriter, r *http.Request) {
+	playerName := r.URL.Query().Get("player")
+	if playerName == "" {
+		http.Error(w, "имя игрока необходимо(параметр player)", http.StatusBadRequest)
+		return
+	}
+
+	s.playersMutex.Lock()
+	player, ok := s.players[playerName]
+	if !ok {
+		http.Error(w, "игрок не найден", http.StatusNotFound)
+		return
+	}
+	s.playersMutex.Unlock()
+
+	history := s.historyGame[*player]
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(history); err != nil {
+		http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
+		return
+	}
 }
