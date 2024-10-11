@@ -113,6 +113,20 @@ func (c *Client) DoStep(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Игра завершена", http.StatusBadRequest)
 		return
 	}
+	// Извлечение и парсинг поля step из запроса
+	var requestData map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		http.Error(w, fmt.Sprintf("ошибка декодирования запроса: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	step, ok := requestData["step"]
+	if !ok {
+		http.Error(w, "поле step отсутствует в запросе", http.StatusBadRequest)
+		return
+	}
+	c.game.Moves = append(c.game.Moves, step)
+
 	var coord1, coord2 string
 	fmt.Print("Введите ваш ход (например, '1 1'): ")
 	fmt.Scanln(&coord1, &coord2)
@@ -130,7 +144,7 @@ func (c *Client) DoStep(w http.ResponseWriter, r *http.Request) {
 func (c *Client) GetSteps(w http.ResponseWriter, r *http.Request) {
 	var steps string
 	for _, move := range c.game.Moves {
-		steps += move + " "
+		steps += move + "\n"
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(steps))

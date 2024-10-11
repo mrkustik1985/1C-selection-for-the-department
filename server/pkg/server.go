@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -56,25 +57,25 @@ func (s *Server) SuggestGame(w http.ResponseWriter, r *http.Request) {
 	gameName := r.URL.Query().Get("game")
 	playerName := r.URL.Query().Get("player")
 	if gameName == "" || playerName == "" {
-		http.Error(w, "game and player parameters are required", http.StatusBadRequest)
+		http.Error(w, "game and player необходимы в запросе", http.StatusBadRequest)
 		return
 	}
 	s.playersMutex.Lock()
 	player, ok := s.players[playerName]
 	if !ok {
-		http.Error(w, "player not found", http.StatusNotFound)
+		http.Error(w, "игрок не найден", http.StatusNotFound)
 		return
 	}
 	s.playersMutex.Unlock()
 
 	s.gamesMutex.Lock()
 	if _, ok := s.games[gameName]; ok {
-		http.Error(w, "game already exists", http.StatusConflict)
+		http.Error(w, "игра уже существует", http.StatusConflict)
 		return
 	}
 	s.gamesMutex.Unlock()
 
-	fmt.Print(fmt.Sprintf("будем начинать игру с %s вторыми?(1 - нет, 0 - да): ", player.Name))
+	fmt.Print(fmt.Sprintf("будем начинать игру с игроком %s вторыми?(1 - да, 0 - нет): ", player.Name))
 	var is_need_start string
 	fmt.Scanln(&is_need_start)
 	// Формирование URL для запроса к игроку
@@ -185,6 +186,100 @@ func (s *Server) GetGameNotFinished(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
+func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
+	// Получение параметров из запроса
+	gameName := r.URL.Query().Get("game")
 
-// }
+	if gameName == "" {
+		http.Error(w, "передайте параметр game", http.StatusBadRequest)
+		return
+	}
+
+	// Проверка наличия игры
+	s.gamesMutex.Lock()
+	game, ok := s.games[gameName]
+	if !ok {
+		s.gamesMutex.Unlock()
+		http.Error(w, "игра не найдена", http.StatusNotFound)
+		return
+	}
+	s.gamesMutex.Unlock()
+
+	// Логика для выполнения шага
+	var coord1, coord2 string
+	fmt.Print("Введите ваш ход (например, '1 1'): ")
+	fmt.Scanln(&coord1, &coord2)
+
+	game.Moves = append(game.Moves, fmt.Sprintf("%s krest %s %s", game.Player.Name, coord1, coord2))
+
+	// Отправка успешного ответа
+
+	url := fmt.Sprintf("http://%s/do_step", game.Player.Address)
+
+	// Формирование данных для запроса
+	stepData := map[string]string{
+		"step": fmt.Sprintf("%s krest %s %s", "Eddi", coord1, coord2),
+	}
+
+	jsonData, err := json.Marshal(stepData)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("ошибка маршалинга JSON: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Отправка POST-запроса к игроку и ожидание ответа от него(что он тоже сделал шаг)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("ошибка отправки запроса к игроку: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+	fmt.Print("получили ответ от игрока")
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
+			http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока: %v", resp.Status), http.StatusInternalServerError)
+			return
+		}
+
+		errorMessage, ok := errorResponse["error"].(string)
+		if !ok {
+			http.Error(w, fmt.Sprintf("неожиданный статус ответа от игрока: %v", resp.Status), http.StatusInternalServerError)
+			return
+		}
+
+		http.Error(w, fmt.Sprintf("ошибка от игрока: %s", errorMessage), http.StatusInternalServerError)
+		return
+	}
+
+	// Чтение ответа от игрока
+	var playerResponse map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&playerResponse); err != nil {
+		http.Error(w, fmt.Sprintf("ошибка декодирования ответа от игрока: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Извлечение шага из ответа игрока
+	playerStep, ok := playerResponse["step"].(string)
+	if !ok {
+		http.Error(w, "не удалось извлечь шаг из ответа игрока", http.StatusInternalServerError)
+		return
+	}
+	game.Moves = append(game.Moves, playerStep)
+
+	// Обновление игры в карте
+
+	s.gamesMutex.Lock()
+	s.games[gameName] = game
+	s.gamesMutex.Unlock()
+
+	response := map[string]string{
+		"message": fmt.Sprintf("Шаг выполнен в игре %s игроком %s", gameName, game.Player.Name),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, fmt.Sprintf("ошибка кодирования ответа: %v", err), http.StatusInternalServerError)
+		return
+	}
+}

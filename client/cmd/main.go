@@ -42,6 +42,7 @@ func main() {
 
 	r.Get("/get_game", client.GetGame)
 	r.Get("/steps", client.GetSteps)
+	r.Post("/do_step", client.DoStep)
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port), r); err != nil {
 		log.Fatalf("Ошибка запуска сервера: %s", err)
