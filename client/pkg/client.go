@@ -54,7 +54,6 @@ func (c *Client) DoStep(w http.ResponseWriter, r *http.Request) {
 	is_finished := requestData["is_finished"]
 	if is_finished == "true" {
 		c.game.IsFinished = true
-		return
 	}
 	step, ok := requestData["step"]
 	if !ok {
@@ -62,14 +61,15 @@ func (c *Client) DoStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c.game.Moves = append(c.game.Moves, step)
-
-	var coord1, coord2 string
-	fmt.Print("Введите ваш ход (например, '1 1'): ")
-	fmt.Scanln(&coord1, &coord2)
-	response := map[string]string{
-		"step": c.Name + " zero " + coord1 + " " + coord2,
+	response := make(map[string]string)
+	response["step"] = ""
+	if c.game.IsFinished == false {
+		var coord1, coord2 string
+		fmt.Print("Введите ваш ход (например, '1 1'): ")
+		fmt.Scanln(&coord1, &coord2)
+		response["step"] = c.Name + " zero " + coord1 + " " + coord2
+		c.game.Moves = append(c.game.Moves, response["step"])
 	}
-	c.game.Moves = append(c.game.Moves, response["step"])
 	winner := checkGame(c.game.Moves)
 	log.Println("winner: ", winner)
 	if winner == "try_add_where_stand" {

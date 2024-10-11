@@ -62,7 +62,7 @@ func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
 	fmt.Scanln(&coord1, &coord2)
 
 	game.Moves = append(game.Moves, fmt.Sprintf("%s krest %s %s", game.Player.Name, coord1, coord2))
-	
+
 	// Проверка на победителя
 	winner := checkGame(game.Moves)
 	if winner == "try_add_where_stand" {
@@ -95,7 +95,6 @@ func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	fmt.Print("получили ответ от игрока")
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse map[string]interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&errorResponse); err != nil {
@@ -119,6 +118,9 @@ func (s *Server) MakeStepByGame(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("ошибка декодирования ответа от игрока: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	fmt.Print("получили ответ от игрока playerstep")
+
 
 	// Извлечение шага из ответа игрока
 	playerStep, ok := playerResponse["step"].(string)

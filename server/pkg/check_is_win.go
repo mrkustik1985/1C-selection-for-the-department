@@ -38,16 +38,12 @@ func checkGame(input []string) string {
 		{-1, -1, -1},
 		{-1, -1, -1},
 	}
-
 	for _, line := range input {
 		// Разделяем строку на части
-		parts := strings.Split(line, " ")
-
-		if len(parts) != 4 {
-			fmt.Println("Неверный формат строки:", line)
+		if line == "" {
 			continue
 		}
-
+		parts := strings.Split(line, " ")
 		// Получаем индексы в матрице
 		i, err1 := strconv.Atoi(parts[2])
 		j, err2 := strconv.Atoi(parts[3])
